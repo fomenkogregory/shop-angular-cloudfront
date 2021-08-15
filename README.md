@@ -29,3 +29,8 @@ Follow the steps:
 - git clone
 - npm i
 - ng serve
+
+# Task 2
+
+[CloudFront](d1ywji41kznyxn.cloudfront.net)
+[S3 Bucket](http://aws-rss-11.s3-website-us-east-1.amazonaws.com/)

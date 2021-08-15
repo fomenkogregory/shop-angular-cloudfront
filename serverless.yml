@@ -1,0 +1,91 @@
+service: aws-rss-service-11
+
+frameworkVersion: '2'
+
+provider:
+  name: aws
+  runtime: nodejs12.x
+
+plugins:
+  - serverless-finch
+  - serverless-single-page-app-plugin
+
+custom:
+  client:
+    bucketName: aws-rss-11
+    distributionFolder: dist/app
+  s3LocalPath: ${self:custom.client.distributionFolder}/
+  s3Bucket: ${self:custom.client.bucketName}
+
+resources:
+  Resources:
+    WebAppS3Bucket:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.s3Bucket}
+        AccessControl: PublicRead
+        WebsiteConfiguration:
+          IndexDocument: index.html
+          ErrorDocument: index.html
+    WebAppS3BucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: WebAppS3Bucket
+        PolicyDocument:
+          Statement:
+            - Sid: AllowCloudFrontAccessIdentity
+              Effect: Allow
+              Action: s3:GetObject
+              Resource: arn:aws:s3:::${self:custom.s3Bucket}/*
+              Principal:
+                AWS:
+                  Fn::Join:
+                    - " "
+                    - - "arn:aws:iam::cloudfront:user/CloudFront Origin Access Identity"
+                      - !Ref OriginAccessIdentity
+    OriginAccessIdentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: Access identity between CloudFront and S3 bucket
+    WebAppCloudFrontDistribution:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+          Origins:
+            - DomainName: ${self:custom.s3Bucket}.s3.amazonaws.com
+              Id: WebApp
+              S3OriginConfig:
+                OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${OriginAccessIdentity}
+          Enabled: true
+          DefaultRootObject: index.html
+          CustomErrorResponses:
+            - ErrorCode: 404
+              ResponseCode: 200
+              ResponsePagePath: /index.html
+          DefaultCacheBehavior:
+            AllowedMethods:
+              - GET
+              - HEAD
+              - OPTIONS
+            TargetOriginId: WebApp
+            ForwardedValues:
+              Headers:
+                - Access-Control-Request-Headers
+                - Access-Control-Request-Method
+                - Origin
+                - Authorization
+              QueryString: false
+              Cookies:
+                Forward: none
+            ViewerProtocolPolicy: redirect-to-https
+          ViewerCertificate:
+            CloudFrontDefaultCertificate: true
+  Outputs:
+    WebAppS3BucketOutput:
+      Value:
+        'Ref': WebAppS3Bucket
+    WebAppCloudFrontDistributionOutput:
+      Value:
+        'Fn::GetAtt': [ WebAppCloudFrontDistribution, DomainName ]
